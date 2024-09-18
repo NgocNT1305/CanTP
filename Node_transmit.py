@@ -4,6 +4,12 @@ import can
 import time
 from Can_TP import can_tp_send
 
+"""==================================================================
+Script: 
+=====================================================================
+"""
+
+
 # Define message data
 DATA = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 
@@ -16,7 +22,7 @@ def send_data(bus):
     try:
         frames = can_tp_send(DATA, is_can_fd = False)
         for frame in frames:
-            msg = can.Message(arbitration_id=0x123, data=frame, is_extended_id=False)
+            msg = can.Message(arbitration_id = 0x123, data = frame, is_extended_id = False)
             bus.send(msg)
             print(f"Send Frame: {frame}")
             time.sleep(0.1)
@@ -24,6 +30,9 @@ def send_data(bus):
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    bus = setup_virtual_can_bus()
-    print("Node is transmitting data ...")
-    send_data(bus)
+    try:
+        bus = setup_virtual_can_bus()
+        print("Node is transmitting data ...")
+        send_data(bus)
+    finally:
+        bus.shutdown()

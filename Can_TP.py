@@ -1,3 +1,5 @@
+import can
+
 # Can_TP.py
 
 CAN_2_0_MAX_PAYLOAD = 8  # 8 bytes for CAN 2.0
@@ -9,7 +11,7 @@ PCI_FF = 0x10  # First Frame
 PCI_CF = 0x20  # Consecutive Frame
 PCI_FC = 0x30  # Flow Control
 
-def can_tp_send(data, is_can_fd=False):
+def can_tp_send(data, is_can_fd = False):
     max_payload = CAN_FD_MAX_PAYLOAD if is_can_fd else CAN_2_0_MAX_PAYLOAD
     frames = []
     data_length = len(data)
@@ -37,48 +39,49 @@ def receive_can_tp_messages(bus):
     received_frames = []
     full_message = bytearray()
     expected_sequence_number = 1
-    
-    while True:
-        # Read a message from the bus
-        msg = bus.recv(timeout=1)
-        
-        if msg is None:
-            print("Timeout waiting for CAN message.")
-            break
 
-        # PCI byte is the first byte of the message data
-        pci_byte = msg.data[0] >> 4  # Extract the first 4 bits
+    with can.Bus(interface='virtual', channel=1, bitrate=1000000) as bus:
+        print("Waiting to receive messages...")
+        while True:
+            # Read a message from the bus
+            msg = bus.recv(timeout = 5)
 
-        # Handle single frame
-        if pci_byte == PCI_SF:
-            received_frames.append(msg)
-            print(f"Single frame received: {msg.data}")
-            return received_frames
-
-        # Handle first frame
-        elif pci_byte == PCI_FF:
-            received_frames.append(msg)
-            print(f"First frame received: {msg.data}")
-            # Extract and store data
-            full_message.extend(msg.data[2:])  # Skip PCI and length bytes
-
-        # Handle consecutive frame
-        elif pci_byte == PCI_CF:
-            sequence_number = msg.data[0] & 0x0F  # Last 4 bits
-            if sequence_number == expected_sequence_number:
-                received_frames.append(msg)
-                print(f"Consecutive frame {sequence_number} received: {msg.data}")
-                full_message.extend(msg.data[1:])  # Skip the PCI byte
-                expected_sequence_number = (expected_sequence_number + 1) % 16
-            else:
-                print("Unexpected sequence number.")
+            if msg is None:
+                print("Timeout waiting for CAN message.")
                 break
-        
-        # Assuming message ends when full_message has sufficient data
-        # Add custom logic to determine when the message is fully received
-        if message_complete(full_message):
-            break
-    
+
+            # PCI byte is the first byte of the message data
+            pci_byte = msg.data[0] >> 4  # Extract the first 4 bits
+
+            # Handle single frame
+            if pci_byte == PCI_SF:
+                received_frames.append(msg)
+                print(f"Single frame received: {msg.data}")
+                return received_frames
+
+            # Handle first frame
+            elif pci_byte == PCI_FF:
+                received_frames.append(msg)
+                print(f"First frame received: {msg.data}")
+                # Extract and store data
+                full_message.extend(msg.data[2:])  # Skip PCI and length bytes
+
+            # Handle consecutive frame
+            elif pci_byte == PCI_CF:
+                sequence_number = msg.data[0] & 0x0F  # Last 4 bits
+                if sequence_number == expected_sequence_number:
+                    received_frames.append(msg)
+                    print(f"Consecutive frame {sequence_number} received: {msg.data}")
+                    full_message.extend(msg.data[1:])  # Skip the PCI byte
+                    expected_sequence_number = (expected_sequence_number + 1) % 16
+                else:
+                    print("Unexpected sequence number.")
+                    break
+            
+            # Assuming message ends when full_message has sufficient data
+            # Add custom logic to determine when the message is fully received
+            if message_complete(full_message):
+                break
     return received_frames
 
 def message_complete(full_message):
