@@ -11,18 +11,19 @@ def setup_virtual_can_bus():
     # Use a virtual CAN interface for simulation
     return can.Bus(interface='virtual', channel = 1, bitrate = 1000000)
 
-def send_data():
+def send_data(bus):
+    #send data to the node receiver
     try:
-        # ics.GetDLLVersion()
-        with can.Bus(interface='virtual', channel=1, bitrate = 1000000) as bus:
-            while 1:
-                msg = can.Message(arbitration_id=0x123, data=[0x11, 0x22, 0x33, 0x44], is_extended_id=False)
-                bus.send(msg)
-                print("Message sent successfully")
-                # time.sleep(2)
+        frames = can_tp_send(DATA, is_can_fd = False)
+        for frame in frames:
+            msg = can.Message(arbitration_id=0x123, data=frame, is_extended_id=False)
+            bus.send(msg)
+            print(f"Send Frame: {frame}")
+            time.sleep(0.1)
     except Exception as e:
         print(f"An error occurred: {e}")
-        # ics.find_devices()
 
 if __name__ == "__main__":
     bus = setup_virtual_can_bus()
+    print("Node is transmitting data ...")
+    send_data(bus)
