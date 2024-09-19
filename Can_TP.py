@@ -18,13 +18,13 @@ class PCI_types(Enum):
     PCI_CF = 0x02  # Consecutive Frame
     PCI_FC = 0x03  # Flow Control
 
+MAX_BLOCK_SIZE = 2
+
 class FS_types(Enum):
     FC_ERROR        = 0x00
     FC_OVERFLOW     = 0x01
     FC_WAIT         = 0x02
     FC_CONTINOUS    = 0x03
-
-Check_arbitration_id = 0x123
 
 def can_tp_send(data, is_can_fd=False):
     # CAN 2.0 payload is 8 bytes, CAN FD payload is 64 bytes
@@ -56,16 +56,65 @@ def can_tp_send(data, is_can_fd=False):
 
 def receive_can_tp_messages(bus):
     received_frames = []
-    full_message = bytearray()  # Buffer to store reassembled data
-    expected_sequence_number = 1  # Sequence number for consecutive frames
-    total_length = 0  # Total length of the message (from FF)
-
+    full_message = bytearray()
+    
     while True:
         # Read a message from the bus
-        msg = bus.recv(timeout=5)
+        msg = bus.recv(timeout=5)  # Increase timeout if needed
+        
         if msg:
-            print(msg)
-            #print("Timeout waiting for CAN message.")
-        else:     
-            print("No message received within the timeout period.")
-            time.sleep(2)
+            pci_byte = msg.data[0] >> 4  # Lấy 4 bit cao để xác định loại PCI
+
+            # Handle Single Frame (SF)
+            if pci_byte == PCI_types.PCI_SF.value:
+                SF_datalength = msg.data[0] & 0x0F  # Lấy 4 bit thấp để xác định độ dài dữ liệu
+                received_frames.append(msg.data[1:1 + SF_datalength])  # Lấy dữ liệu từ byte 1 trở đi
+                print(f"Single Frame received: {received_frames}, Data length: {SF_datalength}")
+
+            # Handle First Frame (FF)
+            elif pci_byte == PCI_types.PCI_FF.value:
+                # Trường hợp data length <= 4095 byte
+                if (msg.data[0] & 0x0F) < 0x0F:
+                    # Chỉ lấy 4 bit cuối của byte đầu tiên và kết hợp với byte thứ hai
+                    data_length = ((msg.data[0] & 0x0F) << 8) | msg.data[1]
+                    data = list(msg.data[2:])
+                    received_frames.append(data)  # Lấy dữ liệu từ byte 2 trở đi
+                    print(f"First Frame data received (<= 4095): {data}, Data length: {data_length}")
+                
+                # Trường hợp data length > 4095 byte
+                else:
+                    # Tính toán data_length từ 4 byte tiếp theo (byte 1 đến byte 4)
+                    data_length = ((msg.data[1] << 24) | (msg.data[2] << 16) | (msg.data[3] << 8) | msg.data[4])
+                    # Lấy dữ liệu từ byte thứ 5 trở đi
+                    data = list(msg.data[5:])  
+                    print(f"First Frame data received (> 4095): {data}, Data length: {data_length}")
+                
+                block_size = MAX_BLOCK_SIZE
+                send_flow_control(bus, FS_types.FC_CONTINOUS.value, block_size)
+
+            elif pci_byte == PCI_types.PCI_CF.value:
+                data = list(msg.data[1:])
+                received_frames.append(data)
+                print(f"Consecutive Frame data received: {data}")
+            
+            if sum(len(frame) for frame in received_frames) >= data_length:
+                print(f"All frames received. Total data length: {data_length}")
+                break  # Kết thúc khi nhận đủ dữ liệu
+
+    return received_frames
+
+#==========================================================================
+
+def send_flow_control(bus, fs=FS_types.FC_CONTINOUS.value, block_size=15, st_min=0):
+    # Chuẩn bị dữ liệu cho Flow Control frame
+    # FS (Flow Status) là byte đầu tiên, BS (Block Size) là byte thứ hai, STmin là byte thứ ba
+    fc_frame_data = [fs, block_size, int(st_min * 1000)]  # Giả sử STmin tính bằng miligiây
+
+    # Tạo thông điệp CAN với arbitration_id và dữ liệu fc_frame_data
+    msg = can.Message(arbitration_id=0x123, data=fc_frame_data, is_extended_id=False)
+
+    try:
+        bus.send(msg)
+        
+    except can.CanError as e:
+        print(f"Error sending Flow Control: {e}")

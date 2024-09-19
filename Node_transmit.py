@@ -10,22 +10,29 @@ from Can_TP import can_tp_send
 Script: 
 =====================================================================
 """
+DATA = "Hello hello Wourld"
 
-# Define message data
-DATA = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+# # Đặt giá trị tối đa cho số phần tử
+# max_elements = 20  # Thay đổi giá trị này theo nhu cầu của bạn
+
+# # Vòng lặp để điền số phần tử vào DATA
+# for i in range(max_elements):
+#     DATA.append(i)
 
 def setup_virtual_can_bus():
-    # Use a virtual CAN interface for simulation
+    
     return can.Bus(interface='virtual', channel = 1, bitrate = 1000000, receive_own_messages = True)
 
 def send_data(bus):
-    #send data to the node receiver
-    frames = can_tp_send(DATA, is_can_fd = False)
+   
+    byte_data = DATA.encode('utf-8')
+   
+    frames = can_tp_send(byte_data, is_can_fd=False)
     for frame in frames:
         msg = can.Message(
-            arbitration_id = 0x123, 
-            data = frame, 
-            is_extended_id = False
+            arbitration_id=0x123,
+            data=frame,
+            is_extended_id=False
         )
         try:
             bus.send(msg)
@@ -35,10 +42,3 @@ def send_data(bus):
             print(f"An error occurred: {e}")
 
 
-# if __name__ == "__main__":
-#     try:
-#         bus = setup_virtual_can_bus()
-#         print("Node is transmitting data ...")
-#         send_data(bus)
-#     finally:
-#         bus.shutdown()
