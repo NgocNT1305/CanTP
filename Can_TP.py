@@ -1,93 +1,71 @@
-import can
-
+#=========================================================================
 # Can_TP.py
+#=========================================================================
+import can
+import time
+import ics
+from enum import Enum
 
-CAN_2_0_MAX_PAYLOAD = 8  # 8 bytes for CAN 2.0
-CAN_FD_MAX_PAYLOAD = 64  # 64 bytes for CAN FD
+#Can type includes Can 2.0 and Can FD
+class CAN_TYPE(Enum):
+    CAN_2_0_MAX_PAYLOAD = 8  # 8 bytes for CAN 2.0
+    CAN_FD_MAX_PAYLOAD = 64  # 64 bytes for CAN FD
 
 # PCI types
-PCI_SF = 0x00  # Single Frame
-PCI_FF = 0x10  # First Frame
-PCI_CF = 0x20  # Consecutive Frame
-PCI_FC = 0x30  # Flow Control
+class PCI_types(Enum):
+    PCI_SF = 0x00  # Single Frame
+    PCI_FF = 0x01  # First Frame
+    PCI_CF = 0x02  # Consecutive Frame
+    PCI_FC = 0x03  # Flow Control
 
-def can_tp_send(data, is_can_fd = False):
-    max_payload = CAN_FD_MAX_PAYLOAD if is_can_fd else CAN_2_0_MAX_PAYLOAD
+class FS_types(Enum):
+    FC_ERROR        = 0x00
+    FC_OVERFLOW     = 0x01
+    FC_WAIT         = 0x02
+    FC_CONTINOUS    = 0x03
+
+Check_arbitration_id = 0x123
+
+def can_tp_send(data, is_can_fd=False):
+    # CAN 2.0 payload is 8 bytes, CAN FD payload is 64 bytes
+    max_payload = CAN_TYPE.CAN_FD_MAX_PAYLOAD.value if is_can_fd else CAN_TYPE.CAN_2_0_MAX_PAYLOAD.value
     frames = []
     data_length = len(data)
 
-    if data_length <= max_payload:
-        # Single Frame
-        pci_byte = PCI_SF | (data_length & 0x0F)
-        frames.append([pci_byte] + data)
+    # Calculate how many bytes can be used for data in a single frame
+    if data_length <= max_payload - 1:
+        # Single Frame (SF) - PCI byte takes up the first byte
+        pci_byte = (PCI_types.PCI_SF.value << 4) | (data_length & 0x0F)
+        frame = [pci_byte] + data
+        frames.append(frame)
     else:
-        # First Frame
-        pci_bytes = [PCI_FF | ((data_length >> 8) & 0x0F), data_length & 0xFF]
-        frames.append(pci_bytes + data[:max_payload - 2])
-
-        # Consecutive Frames
+        # First Frame (FF) - Two bytes for PCI, rest for data
+        first_frame_data_length = max_payload - 2
+        pci_bytes = [(PCI_types.PCI_FF.value << 4) | ((data_length >> 8) & 0x0F), data_length & 0xFF]
+        frame = pci_bytes + data[:first_frame_data_length]
+        frames.append(frame)
+        # Consecutive Frames (CF) - Sequence number starts at 1
         seq_num = 1
-        for i in range(max_payload - 2, data_length, max_payload - 1):
-            pci_byte = PCI_CF | (seq_num & 0x0F)
-            frames.append([pci_byte] + data[i:i + max_payload - 1])
+        for i in range(first_frame_data_length, data_length, max_payload - 1):
+            pci_byte = (PCI_types.PCI_CF.value << 4) | (seq_num & 0x0F)
+            frame = [pci_byte] + data[i:i + (max_payload - 1)]
+            frames.append(frame)
             seq_num = (seq_num + 1) & 0x0F  # Sequence number wraps around at 0xF
 
     return frames
 
-
 def receive_can_tp_messages(bus):
     received_frames = []
-    full_message = bytearray()
-    expected_sequence_number = 1
+    full_message = bytearray()  # Buffer to store reassembled data
+    expected_sequence_number = 1  # Sequence number for consecutive frames
+    total_length = 0  # Total length of the message (from FF)
 
-    with can.Bus(interface='virtual', channel=1, bitrate=1000000) as bus:
-        print("Waiting to receive messages...")
-        while True:
-            # Read a message from the bus
-            msg = bus.recv(timeout = 5)
-
-            if msg is None:
-                print("Timeout waiting for CAN message.")
-                break
-
-            # PCI byte is the first byte of the message data
-            pci_byte = msg.data[0] >> 4  # Extract the first 4 bits
-
-            # Handle single frame
-            if pci_byte == PCI_SF:
-                received_frames.append(msg)
-                print(f"Single frame received: {msg.data}")
-                return received_frames
-
-            # Handle first frame
-            elif pci_byte == PCI_FF:
-                received_frames.append(msg)
-                print(f"First frame received: {msg.data}")
-                # Extract and store data
-                full_message.extend(msg.data[2:])  # Skip PCI and length bytes
-
-            # Handle consecutive frame
-            elif pci_byte == PCI_CF:
-                sequence_number = msg.data[0] & 0x0F  # Last 4 bits
-                if sequence_number == expected_sequence_number:
-                    received_frames.append(msg)
-                    print(f"Consecutive frame {sequence_number} received: {msg.data}")
-                    full_message.extend(msg.data[1:])  # Skip the PCI byte
-                    expected_sequence_number = (expected_sequence_number + 1) % 16
-                else:
-                    print("Unexpected sequence number.")
-                    break
-            
-            # Assuming message ends when full_message has sufficient data
-            # Add custom logic to determine when the message is fully received
-            if message_complete(full_message):
-                break
-    return received_frames
-
-def message_complete(full_message):
-    """
-    Placeholder function to determine if the message has been fully received.
-    You will need to implement this logic based on your application's needs.
-    """
-    # Example: return True if the message has reached a certain length
-    return len(full_message) >= 64  # Example condition for CAN FD
+    while True:
+        # Read a message from the bus
+        msg = bus.recv(timeout=5)
+        if msg:
+            print(msg)
+            #print("Timeout waiting for CAN message.")
+        else:     
+            print("No message received within the timeout period.")
+            time.sleep(2)

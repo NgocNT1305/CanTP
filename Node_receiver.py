@@ -1,4 +1,6 @@
 import can
+import ics
+import time
 from Can_TP import receive_can_tp_messages
 
 # Global list to store data from received CAN TP frames
@@ -6,7 +8,7 @@ received_data_list = []
 
 def setup_virtual_can_bus():
     # Use a virtual CAN interface for simulation
-    return can.Bus(interface='virtual', channel=1, bitrate=1000000)
+    return can.Bus(interface='virtual', channel = 1, bitrate = 1000000, receive_own_messages = True)
 
 def process_received_data(bus):
     global received_data_list  # Declare the global variable
@@ -34,11 +36,11 @@ def process_received_data(bus):
         except UnicodeDecodeError:
             print("Received non-text data.")
 
-if __name__ == "__main__":
-    try:
-        bus = setup_virtual_can_bus()
-        process_received_data(bus)
-    finally:
-        bus.shutdown()  # Đảm bảo bus được tắt
+# if __name__ == "__main__":
+#     try:
+#         bus = setup_virtual_can_bus()
+#         process_received_data(bus)
+#     finally:
+#         bus.shutdown()  # Đảm bảo bus được tắt
 
 

@@ -2,7 +2,9 @@
 
 import threading
 import subprocess
-
+import Node_receiver
+import Node_transmit
+import time
 # Define the functions to run each script
 def run_transmit():
     subprocess.run(["python", "Node_transmit.py"])
@@ -11,14 +13,12 @@ def run_receive():
     subprocess.run(["python", "Node_receiver.py"])
 
 if __name__ == "__main__":
-    # Create threads for sending and receiving
-    sender_thread = threading.Thread(target=run_transmit)
-    receiver_thread = threading.Thread(target=run_receive)
-    
-    # Start the threads
-    sender_thread.start()
-    receiver_thread.start()
-    
-    # Wait for both threads to finish
-    sender_thread.join()
-    receiver_thread.join()
+
+    try:
+        bus = Node_transmit.setup_virtual_can_bus()
+        print("Node is transmitting data ...")
+        Node_transmit.send_data(bus)
+        Node_receiver.process_received_data(bus)
+        time.sleep(2)
+    finally:
+        bus.shutdown()
