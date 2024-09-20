@@ -32,7 +32,6 @@ def send_data(bus):
         )
         try:
             bus.send(msg)
-            print(f"Send Frame: {frame}")
             time.sleep(0.1)
         except Exception as e:
             print(f"An error occurred: {e}")

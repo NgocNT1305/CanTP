@@ -64,7 +64,7 @@ def receive_can_tp_messages(bus):
 
     while True:
         # Đọc một thông điệp từ bus
-        msg = bus.recv(timeout=5)  # Tăng thời gian timeout nếu cần
+        msg = bus.recv(timeout=1)  # Tăng thời gian timeout nếu cần
 
         if msg:
             pci_byte = msg.data[0] >> 4  # Lấy 4 bit cao để xác định loại PCI
@@ -109,7 +109,7 @@ def receive_can_tp_messages(bus):
                     data = msg.data[1:]  # Lấy dữ liệu từ byte thứ 2 trở đi
                     received_frames.append(list(data))  # Chuyển đổi list thành bytearray
                     remaining_length -= len(data)
-                    current_sn = (current_sn + 1) % 16  # Tăng SN, quay lại 0 nếu SN >= 15
+                    current_sn = (current_sn + 1) % 16  # Tăng SN, quay lại 1 nếu SN >= 15
                     print(f"Consecutive Frame received: {data}, Remaining length: {remaining_length}")
 
                     # Kiểm tra nếu nhận đủ block size thì gửi Flow Control mới
