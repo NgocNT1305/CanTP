@@ -10,24 +10,20 @@ from Can_TP import can_tp_send
 Script: 
 =====================================================================
 """
-DATA = "Hello hello Wourld"
+DATA = "The CanTp module shall not accept the receiving or the transmission of N-SDU with the same identifier in parallel, because otherwise the received frames cannot be assigned to the correct connection."
 
 # # Đặt giá trị tối đa cho số phần tử
-# max_elements = 20  # Thay đổi giá trị này theo nhu cầu của bạn
+# max_elements = 256  # Thay đổi giá trị này theo nhu cầu của bạn
 
 # # Vòng lặp để điền số phần tử vào DATA
 # for i in range(max_elements):
 #     DATA.append(i)
 
 def setup_virtual_can_bus():
-    
     return can.Bus(interface='virtual', channel = 1, bitrate = 1000000, receive_own_messages = True)
 
 def send_data(bus):
-   
-    byte_data = DATA.encode('utf-8')
-   
-    frames = can_tp_send(byte_data, is_can_fd=False)
+    frames = can_tp_send(DATA, is_can_fd=False)
     for frame in frames:
         msg = can.Message(
             arbitration_id=0x123,
