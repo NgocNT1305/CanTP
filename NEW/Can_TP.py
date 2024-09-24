@@ -24,7 +24,7 @@ class FS_types(Enum):
     FC_WAIT         = 0x02
     FC_CONTINOUS    = 0x03
 
-def can_tp_send(data, is_can_fd=False):
+def can_tp_send(data, is_can_fd=True):
     if isinstance(data, str):
         data = bytearray(data, 'utf-8')
     # CAN 2.0 payload is 8 bytes, CAN FD payload is 64 bytes

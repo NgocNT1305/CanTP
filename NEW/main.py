@@ -16,9 +16,9 @@ if __name__ == "__main__":
 
     try:
         bus = Node_transmit.setup_virtual_can_bus()
-        print("Node is transmitting data ...")
-        Node_transmit.send_data(bus)
+        user_input = input("Enter data to send: ")
+        Node_transmit.send_data(bus, user_input)
         Node_receiver.process_received_data(bus)
-        time.sleep(2)
+        time.sleep(0.1)
     finally:
         bus.shutdown()
