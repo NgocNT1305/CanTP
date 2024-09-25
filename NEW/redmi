@@ -1,6 +1,0 @@
-Sử dụng thư viện python-can để giả lập 1 node nhận, 1 node gửi và xử lí CanTP
-message nhé, mọi người có thể tạo 1 vòng lặp chờ bên transmit bắt đầu gửi 
-message nhé. Node của mình sẽ phải xử lí nhận đúng data length của message, 
-gửi flow control cho bên transmit để không bị flow control timeout, 
-xóa bit padding nếu có. Cuối cùng ghép bytearray nhận được thành 1 
-string hoàn chỉnh
