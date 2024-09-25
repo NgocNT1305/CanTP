@@ -5,7 +5,8 @@ import subprocess
 import Node_receiver
 import Node_transmit
 import time
-# Define the functions to run each script
+
+
 def run_transmit():
     subprocess.run(["python", "Node_transmit.py"])
 
