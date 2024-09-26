@@ -1,6 +1,3 @@
-#=========================================================================
-# Can_TP.py
-#=========================================================================
 import can
 import time
 import ics
@@ -22,68 +19,6 @@ class FS_types(Enum):
     FC_CONTINUE     = 0x00
     FC_WAIT         = 0x01
     FC_OVERFLOW     = 0x02
-
-def send_single_frame(bus, data, is_can_fd=False):
-    pci_byte = (PCI_types.PCI_SF.value << 4) | (len(data) & 0x0F)
-    frame = [pci_byte] + list(data)
-    
-    # Gửi khung CAN (giả định bạn có hàm send_can_frame)
-    send_can_frame(bus, frame)
-    print(f"Single Frame sent: {frame}")
-
-
-def send_multi_frame(bus, data, is_can_fd = False):
-    max_payload = CAN_TYPE.CAN_FD_MAX_PAYLOAD.value if is_can_fd else CAN_TYPE.CAN_2_0_MAX_PAYLOAD.value
-    frames = []
-    data_length = len(data)
-
-    first_frame_data_length = max_payload - 2
-    pci_bytes = [(PCI_types.PCI_FF.value) | ((data_length >> 8) & 0x0F), data_length & 0xFF]
-    first_frame = pci_bytes + list(data[:first_frame_data_length])
-    frames.append(first_frame)
-
-    # Gửi khung đầu tiên
-    send_can_frame(bus, first_frame)
-    print(f"First Frame sent: {first_frame}")
-
-    flow_status, block_size, separation_time = wait_flow_control(bus)
-
-    if flow_status == FS_types.FC_CONTINUE.value:
-
-    # Gửi các khung liên tiếp
-        seq_num = 1
-        for i in range(first_frame_data_length, data_length, max_payload - 1):
-            pci_byte = (PCI_types.PCI_CF.value) | (seq_num & 0x0F)
-            frame = [pci_byte] + list(data[i:i + (max_payload - 1)])
-            frames.append(frame)
-
-            # Gửi khung
-            send_can_frame(bus, frame)
-            print(f"Consecutive Frame sent: {frame}")
-
-            seq_num = (seq_num + 1) & 0x0F
-
-    return frames
-
-
-def send_can_frame(bus, frame):
-    """Send a CAN frame."""
-    if len(frame) > 8:
-        raise ValueError("CAN frame cannot exceed 8 bytes for standard CAN.")
-
-    msg = can.Message(
-        arbitration_id=0x123,
-        data=frame[:8],  # Only take up to 8 bytes
-        is_extended_id=False
-    )
-
-    try:
-        bus.send(msg)
-        print(f"Sent CAN frame: {msg}")
-        time.sleep(0.1)  # Delay to avoid flooding the bus
-    except can.CanError as e:
-        print(f"Error sending CAN frame: {e}")
-
 
 
 def receive_can_tp_messages(bus):
@@ -152,8 +87,7 @@ def receive_can_tp_messages(bus):
 
     return full_message
 
-#==========================================================================
-#==========================================================================
+#===========================================================================================================
 
 def send_flow_control(bus, frame_status, block_size=15, st_min=0):
     pci_byte = (PCI_types.PCI_FC.value) | (frame_status & 0x0F)
@@ -167,39 +101,21 @@ def send_flow_control(bus, frame_status, block_size=15, st_min=0):
         print(msg)
 
     except can.CanError as e:
-        print(f"Error sending Flow Control: {e}")
-
-#==========================================================================
-#==========================================================================
+        print(f"Error sending Flow Control: {e}")   
 
 
-def wait_flow_control(bus):
+def setup_neovi_bus():
+    return can.Bus(interface='neovi', channel=1, bitrate=1000000)
 
-    while True:
-        msg : can.Message = bus.recv(timeout = 1) # Hàm nhận tin nhắn từ CAN bus
-        if msg is None:
-            print("Timeout waiting for Flow Control")
-            continue
-        else: 
-            message = msg.data
-            print(f"Flow control receiver: {list(message)}")
-        return message[0] << 4, message[1], message[2]
 
-#==========================================================================
-#==========================================================================
-
-def send_can_frame(bus, frame, can_id = 0x123, is_extended_id = False, is_fd = False):
+if __name__ == "__main__":
+    bus = setup_neovi_bus()
     try:
-        # Create the CAN message
-        msg = can.Message(
-            arbitration_id=can_id,
-            data = frame,
-            is_extended_id=is_extended_id,
-            is_fd=is_fd 
-        )
-
-        bus.send(msg)
-        print(f"Sent frame: {frame} with CAN ID: {hex(can_id)}")
-    
-    except can.CanError as e:
-        print(f"Failed to send CAN frame: {e}")
+        while True:
+            print("Receive data from the bus")
+            receive_can_tp_messages(bus)
+            time.sleep(0.1)  # Delay to prevent high CPU usage
+    except KeyboardInterrupt:
+        print("Program interrupted by user.")
+    finally:
+        bus.shutdown()

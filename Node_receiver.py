@@ -3,7 +3,7 @@ import time
 from Can_TP import receive_can_tp_messages
 
 def setup_virtual_can_bus():
-    return can.Bus(interface='virtual', channel=1, bitrate=1000000, receive_own_messages=True)
+    return can.Bus(interface='virtual', channel=1, bitrate=1000000, receive_own_messages = False)
 
 def setup_neovi_bus():
     return can.Bus(interface='neovi', channel=1, bitrate=1000000)
