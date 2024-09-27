@@ -7,14 +7,15 @@ Quản lý Flow Control: Gửi các frame Flow Control về node truyền để 
 Xóa bit padding: Loại bỏ các bit padding thừa (nếu có) trong quá trình nhận dữ liệu.
 Ghép dữ liệu: Ghép các khung bytearray nhận được thành một chuỗi hoàn chỉnh và in ra kết quả.
 Cấu trúc dự án
-css
 Sao chép mã
+
 CanTP_Receiver_Project/
 │
 ├── can_tp_receiver.py        # Node nhận CanTP message
 ├── utils.py                  # Các hàm hỗ trợ (xử lý padding, hợp nhất dữ liệu)
 ├── README.md                 # Tài liệu hướng dẫn
 └── requirements.txt          # Danh sách thư viện cần thiết
+
 Hướng dẫn cài đặt
 Yêu cầu
 Cài đặt Python 3.x.

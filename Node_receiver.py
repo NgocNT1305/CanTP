@@ -13,7 +13,7 @@ def process_received_data(bus):
     full_message = receive_can_tp_messages(bus)
  
     if full_message:
-        print(f"Received message: {full_message.decode('utf-8')}")
+        print(f"Received message: {full_message}")
     else:
         print("No frames received.")
  

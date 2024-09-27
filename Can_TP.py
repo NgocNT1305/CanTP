@@ -68,14 +68,24 @@ def send_multi_frame(bus, data, is_can_fd = False):
                 pci_byte = PCI_types.PCI_CF.value | (frame_index & 0x0F)
                 consecutive_frame = [pci_byte] + list(remaining_data[:7])
  
-                while len(consecutive_frame) <= 8:
+                while len(consecutive_frame) < 8:
                     consecutive_frame.append(PADDING.BYTE_PADDING.value)
  
-                    message = can.Message (arbitration_id = 0x123, data = consecutive_frame, is_extended_id = False)
-                    bus.send(message)
-                    print(f"Send consecutive frame: {frame_index}: {message}")
-                    remaining_data = remaining_data[7:]
-                    frame_index += 1
+                    message = can.Message (
+                        arbitration_id = 0x123,
+                        data = consecutive_frame,
+                        is_extended_id = False,
+                        is_fd = False)
+                   
+                bus.send(message)
+                print(f"Send consecutive frame: {frame_index}: {message}")
+                remaining_data = remaining_data[7:]
+                frame_index += 1
+ 
+                if frame_index == block_size:
+                    frame_index = 1
+                    flow_status, block_size, st_min = wait_flow_control(bus)
+ 
  
  
 #=============================================================================================================
@@ -155,24 +165,22 @@ def receive_can_tp_messages(bus):
                         data = msg.data[1:remaining_length+1]
                         received_frames.append(list(data))
                         remaining_length -= len(data)
-                        current_sn = (current_sn + 1) % 16
+                        current_sn += 1
                         print(f"Consecutive Frame received: {list(data)}, Remaining length: {remaining_length}")
  
-                        if len(received_frames) % block_size == 0:
+                        if current_sn == block_size:
                             send_flow_control(bus, FS_types.FC_CONTINUE.value, block_size = block_size, st_min = 0)
  
-                if pci_byte == PCI_types.PCI_FC.value:
-                    flow_status = msg.data[0] & 0x0F
-                    block_size = msg.data[1]
-                    st_min = msg.data[2]
-                    print(f"Flow Control Frame received: FS={flow_status}, Block Size={block_size}, STmin={st_min}")
+                # if pci_byte == PCI_types.PCI_FC.value:
+                #     flow_status = msg.data[0] & 0x0F
+                #     block_size = msg.data[1]
+                #     st_min = msg.data[2]
+                #     print(f"Flow Control Frame received: FS={flow_status}, Block Size={block_size}, STmin={st_min}")
         if remaining_length < 0:
             print(f"All frames received. Total data length: {data_length}")
             break
- 
-    full_message = bytearray()
-    for frame in received_frames:
-        if isinstance(frame, list):
-            full_message.extend(bytearray(frame))
- 
-    return full_message
+        full_message = bytearray()
+        for frame in received_frames:
+            if isinstance(frame, list):
+                full_message.extend(bytearray(frame))
+    return received_frames
