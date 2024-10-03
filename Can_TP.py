@@ -28,7 +28,6 @@ class FS_types(Enum):
 class PADDING(Enum):
     BYTE_PADDING    = 0x00
  
- 
 class MAXFRAMETYPE(Enum):
     CAN_20_MAX_DATA = 8                          
     CAN_FD_MAX_DATA = 64                              
@@ -43,57 +42,67 @@ class MAXFRAMETYPE(Enum):
     MAX_PAYLOAD_FIRST_FD_FRAME_DATA_LESS_THAN_4095 = 62      
     MAX_PAYLOAD_FIRST_FD_FRAME_DATA_BIG_THAN_4095 = 58      
  
+
 #=============================================================================================================
 #=============================================================================================================
 
-def send_one_frame(bus, data, is_can_fd=False):
-    message = can.Message(arbitration_id=0x123, data=data, is_extended_id=False)
+def send_one_frame(bus, data, is_can_fd):
+    message = can.Message(arbitration_id=0x123, data=data, is_extended_id = False, is_fd = is_can_fd)
     bus.send(message)
 
  
-def send_single_frame(bus, data, is_can_fd = False):
+def send_single_frame(bus, data, is_can_fd):
     max_payload = CAN_TYPE.CAN_FD_MAX_PAYLOAD.value if is_can_fd else CAN_TYPE.CAN_2_0_MAX_PAYLOAD.value
     data_length = len(data)
+
     pci_byte = PCI_types.PCI_SF.value | data_length
     frame_data = [pci_byte] + list(data)
  
-    while len(frame_data) < max_payload:
-        frame_data.append(PADDING.BYTE_PADDING.value)
-    message = can.Message (arbitration_id = 0x123, data = frame_data, is_extended_id = False)
-    bus.send(message)
-    print(f"Send frame: {message}")  
+    # while len(frame_data) < max_payload:
+    #     frame_data.append(PADDING.BYTE_PADDING.value)
+    send_one_frame(bus, data = frame_data, is_can_fd = is_can_fd )
+    print(f"Send frame: {frame_data}")  
  
 #=============================================================================================================
 #=============================================================================================================
  
-def send_multi_frame(bus, data, is_can_fd = False):
+def send_multi_frame(bus, data, is_can_fd):
     data_length = len(data)
     pci_byte_1 = PCI_types.PCI_FF.value | (data_length >> 8)
     pci_byte_2 = data_length & 0xFF
- 
-    first_frame_data = [pci_byte_1, pci_byte_2] + list(data[0:6])
-    send_one_frame(bus, data = first_frame_data, is_can_fd = False)
+
+    first_frame_payload_size = MAXFRAMETYPE.MAX_PAYLOAD_FIRST_FD_FRAME_DATA_LESS_THAN_4095.value if is_can_fd else MAXFRAMETYPE.MAX_PAYLOAD_FIRST_CAN_20_FRAME_DATA_LESS_THAN_4095.value
+
+    first_frame_data = [pci_byte_1, pci_byte_2] + list(data[0:first_frame_payload_size])
+    send_one_frame(bus, data = first_frame_data, is_can_fd = is_can_fd)
+
     sequence_number = 0
-    remaining_data = data[6:]
+
+    remaining_data = data[first_frame_payload_size:]
     print(f"Send First frame: {first_frame_data}")
- 
+
     while remaining_data:
         flow_status, block_size, st_min = wait_flow_control(bus)
         if flow_status == FS_types.FC_CONTINOUS.value:
             max_payload = MAXFRAMETYPE.MAX_PAYLOAD_CONSECUTIVE_FD_FRAME.value if is_can_fd else MAXFRAMETYPE.MAX_PAYLOAD_CONSECUTIVE_CAN_20_FRAME.value
+            
             while remaining_data:
                 SDU_size = min(max_payload, len(remaining_data))
+                
                 pci_byte = PCI_types.PCI_CF.value | (sequence_number & 0x0F)
+                
                 consecutive_frame = [pci_byte] + list(remaining_data[:SDU_size])
-   
-                while len(consecutive_frame) < 8:
-                    consecutive_frame.append(PADDING.BYTE_PADDING.value)
+
+                if not is_can_fd: 
+                    while len(consecutive_frame) < 8:
+                        consecutive_frame.append(PADDING.BYTE_PADDING.value)
                 # print(f"Send Consecutive frame {sequence_number}: {consecutive_frame}")
+                
                 send_one_frame(bus, data = consecutive_frame, is_can_fd = False)
                 sequence_number += 1
                 remaining_data = remaining_data[SDU_size:]
                 # print(f"Remaining data: {remaining_data}")
- 
+
                 if (sequence_number % block_size == 0):
                     sequence_number = 0
                     flow_status, block_size, st_min = wait_flow_control(bus)
@@ -141,41 +150,81 @@ def receive_can_tp_messages(bus):
  
         if msg:
             if msg.arbitration_id != 0:
-               
-                pci_byte = msg.data[0] & 0xF0
- 
-                if pci_byte == PCI_types.PCI_SF.value:
-                    SF_datalength = msg.data[0] & 0x0F
-                    data = msg.data[1:1 + SF_datalength]
-                    print(f"Single Frame received: {list(data)}, Data length: {SF_datalength}")
-                    Full_received_frames.append(list(data))
-                    break
- 
-                #First Frame (FF)
-                elif pci_byte == PCI_types.PCI_FF.value:
-                    if msg.data[0] != 0:
-                        data_length = ((msg.data[0] & 0x0F) << 8) + msg.data[1]
-                        Full_received_frames = msg.data[2:]
-                    else:
-                        data_length = (msg.data[2] << 24) | (msg.data[3] << 16) | (msg.data[4] << 8) | msg.data[5]
-                        Full_received_frames = msg.data[6:]
-                       
-                    if data_length >= 100000:
-                        send_flow_control(bus, FS_types.FC_OVERFLOW.value, block_size = block_size, ST_min = 0)
+                
+                if msg.is_fd == False:
+                    pci_byte = msg.data[0] & 0xF0
+    
+                    if pci_byte == PCI_types.PCI_SF.value:
+                        SF_datalength = msg.data[0] & 0x0F
+                        data = msg.data[1:1 + SF_datalength]
+                        print(f"Single Frame received: {list(data)}, Data length: {SF_datalength}")
+                        Full_received_frames.append(list(data))
                         break
-                    print(f"First Frame received: {list(Full_received_frames)}, Data length: {data_length}")
-                    send_flow_control(bus, FS_types.FC_CONTINOUS.value, block_size = block_size, ST_min = 0)
-                   
-                #Consecutive Frame (CF)
-                elif pci_byte == PCI_types.PCI_CF.value:
-                    current_sn = msg.data[0] & 0x0F
-                    Full_received_frames += msg.data[1:]
-                    print(f"Consecutive Frame {current_sn} received: {list(msg.data)}")
-                    frame_receiverd += 1
-                    if (current_sn + 1 == 15):
+    
+                    #First Frame (FF)
+                    elif pci_byte == PCI_types.PCI_FF.value:
+                        if msg.data[0] != 0:
+                            data_length = ((msg.data[0] & 0x0F) << 8) + msg.data[1]
+                            Full_received_frames = msg.data[2:]
+                        else:
+                            data_length = (msg.data[2] << 24) | (msg.data[3] << 16) | (msg.data[4] << 8) | msg.data[5]
+                            Full_received_frames = msg.data[6:]
+                        
+                        if data_length >= 100000:
+                            send_flow_control(bus, FS_types.FC_OVERFLOW.value, block_size = block_size, ST_min = 0)
+                            break
+                        print(f"First Frame received: {list(Full_received_frames)}, Data length: {data_length}")
                         send_flow_control(bus, FS_types.FC_CONTINOUS.value, block_size = block_size, ST_min = 0)
- 
-                if len(Full_received_frames) >= data_length:
-                    print(f"All frames received.")
-                    break
+                    
+                    #Consecutive Frame (CF)
+                    elif pci_byte == PCI_types.PCI_CF.value:
+                        current_sn = msg.data[0] & 0x0F
+                        Full_received_frames += msg.data[1:]
+                        print(f"Frame {current_sn} received: {list(msg.data)}")
+                        frame_receiverd += 1
+                        if (current_sn + 1 == 15):
+                            send_flow_control(bus, FS_types.FC_CONTINOUS.value, block_size = block_size, ST_min = 0)
+    
+                    if len(Full_received_frames) >= data_length:
+                        print(f"All frames received.")
+                        break
+                else:
+                    print("Can FD is here")
+                    pci_byte = msg.data[0] & 0xF0
+                    if pci_byte == PCI_types.PCI_SF.value:
+                        if msg.data[0] & 0x0F == 0:
+                            FF_datalength = msg.data[1]
+                            data = msg.data[2:2 + FF_datalength]
+                        else:
+                            FF_datalength = msg.data[0] & 0x0F
+                            data = msg.data[1:1 + FF_datalength]
+                        print(f"Single Frame received: {list(data)}, Data length: {FF_datalength}")
+                        Full_received_frames.append(list(data))
+                        break
+                    elif pci_byte == PCI_types.PCI_FF.value:
+                        if msg.data[0] != 0:
+                            data_length = ((msg.data[0] & 0x0F) << 8) + msg.data[1]
+                            Full_received_frames = msg.data[2:]
+                        else:
+                            data_length = (msg.data[2] << 24) | (msg.data[3] << 16) | (msg.data[4] << 8) | msg.data[5]
+                            Full_received_frames = msg.data[6:]
+                        
+                        if data_length >= 100000:
+                            send_flow_control(bus, FS_types.FC_OVERFLOW.value, block_size = block_size, ST_min = 0)
+                            break
+                        print(f"First Frame received: {list(Full_received_frames)}, Data length: {data_length}")
+                        send_flow_control(bus, FS_types.FC_CONTINOUS.value, block_size = block_size, ST_min = 0)
+                    #Consecutive Frame (CF)
+                    elif pci_byte == PCI_types.PCI_CF.value:
+                        current_sn = msg.data[0] & 0x0F
+                        Full_received_frames += msg.data[1:]
+                        print(f"Frame {current_sn} received: {list(msg.data)}")
+                        frame_receiverd += 1
+                        if (current_sn + 1 == 15):
+                            send_flow_control(bus, FS_types.FC_CONTINOUS.value, block_size = block_size, ST_min = 0)
+    
+                    if len(Full_received_frames) >= data_length:
+                        print(f"All frames received.")
+                        break
+                            
     return Full_received_frames
