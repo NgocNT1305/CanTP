@@ -11,7 +11,6 @@ def setup_virtual_can_bus():
 def send_frame(bus, data, is_can_fd=False):
     if isinstance(data, str):
         data = bytearray(data, 'utf-8')
-    
     data_length = len(data)
 
     # Kiểm tra độ dài dữ liệu và quyết định loại frame để gửi

@@ -88,15 +88,14 @@ def send_multi_frame(bus, data, is_can_fd = False):
    
                 while len(consecutive_frame) < 8:
                     consecutive_frame.append(PADDING.BYTE_PADDING.value)
-                
+                # print(f"Send Consecutive frame {sequence_number}: {consecutive_frame}")
                 send_one_frame(bus, data = consecutive_frame, is_can_fd = False)
                 sequence_number += 1
-                print(f"Send Consecutive frame {sequence_number}: {consecutive_frame}")
-
                 remaining_data = remaining_data[SDU_size:]
                 # print(f"Remaining data: {remaining_data}")
  
                 if (sequence_number % block_size == 0):
+                    sequence_number = 0
                     flow_status, block_size, st_min = wait_flow_control(bus)
 
 #=============================================================================================================
@@ -105,7 +104,7 @@ def send_multi_frame(bus, data, is_can_fd = False):
  
 def send_flow_control(bus, flow_status = FS_types.FC_CONTINOUS.value, block_size = 15, ST_min = 0):
     pci_byte = PCI_types.PCI_FC.value | flow_status
-    flow_control_frame = [pci_byte, block_size, ST_min, NAbyte, NAbyte, NAbyte]
+    flow_control_frame = [pci_byte, block_size, ST_min, NAbyte, NAbyte, NAbyte, NAbyte, NAbyte]
     message = can.Message (arbitration_id = 0x123, data = flow_control_frame, is_extended_id = False)
     bus.send(message)
     print(f"Send Flow control frame: {message}")
@@ -130,12 +129,11 @@ def wait_flow_control(bus):
 #=============================================================================================================
 #=============================================================================================================
  
- 
 def receive_can_tp_messages(bus):
     Full_received_frames = []
     frame_receiverd = 0
     block_size = 15
-    current_sn = 0
+    current_sn = 1
     data_length = 0
  
     while True:
@@ -155,28 +153,29 @@ def receive_can_tp_messages(bus):
  
                 #First Frame (FF)
                 elif pci_byte == PCI_types.PCI_FF.value:
-                    if msg.data[1] == 0:
-                        data_length == msg.data[2:]
+                    if msg.data[0] != 0:
+                        data_length = ((msg.data[0] & 0x0F) << 8) + msg.data[1]
+                        Full_received_frames = msg.data[2:]
                     else:
-                        data_length = msg.data[0] << 4 + msg.data[1]
+                        data_length = (msg.data[2] << 24) | (msg.data[3] << 16) | (msg.data[4] << 8) | msg.data[5]
+                        Full_received_frames = msg.data[6:]
                        
                     if data_length >= 100000:
                         send_flow_control(bus, FS_types.FC_OVERFLOW.value, block_size = block_size, ST_min = 0)
                         break
-                    frame_receiverd = 0
                     print(f"First Frame received: {list(Full_received_frames)}, Data length: {data_length}")
                     send_flow_control(bus, FS_types.FC_CONTINOUS.value, block_size = block_size, ST_min = 0)
- 
+                   
                 #Consecutive Frame (CF)
                 elif pci_byte == PCI_types.PCI_CF.value:
                     current_sn = msg.data[0] & 0x0F
                     Full_received_frames += msg.data[1:]
-                    print(f"Consecutive Frame received: {list(data)}")
+                    print(f"Consecutive Frame {current_sn} received: {list(msg.data)}")
                     frame_receiverd += 1
-                    if current_sn == block_size:
+                    if (current_sn + 1 == 15):
                         send_flow_control(bus, FS_types.FC_CONTINOUS.value, block_size = block_size, ST_min = 0)
-               
-        if Full_received_frames ==  data_length:
-            print(f"All frames received.")
-            break
+ 
+                if len(Full_received_frames) >= data_length:
+                    print(f"All frames received.")
+                    break
     return Full_received_frames

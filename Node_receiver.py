@@ -11,14 +11,17 @@ def setup_neovi_bus():
 def process_received_data(bus):
     """Process incoming CAN messages."""
     full_message = receive_can_tp_messages(bus)
- 
+    
     if full_message:
-        print(f"Received message: {full_message}")
+        # Sửa lỗi cú pháp tại đây
+        decoded_message = ''.join(chr(byte) for byte in full_message)
+        print(f"Received message: {decoded_message}")
     else:
         print("No frames received.")
+
  
 if __name__ == "__main__":
-    use_virtual_bus = True  # Set to True to use the virtual bus
+    use_virtual_bus = False  # Set to True to use the virtual bus
  
     if use_virtual_bus:
         bus = setup_virtual_can_bus()
