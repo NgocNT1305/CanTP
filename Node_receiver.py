@@ -18,7 +18,7 @@ def process_received_data(bus):
         print("No frames received.")
  
 if __name__ == "__main__":
-    use_virtual_bus = False  # Set to True to use the virtual bus
+    use_virtual_bus = True  # Set to True to use the virtual bus
  
     if use_virtual_bus:
         bus = setup_virtual_can_bus()
