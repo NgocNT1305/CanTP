@@ -29,7 +29,7 @@ def send_frame(bus, data, is_can_fd):
 
 if __name__ == "__main__":
     # Use virtual or neovi based on preference
-    use_virtual_bus = True
+    use_virtual_bus = False
  
     if use_virtual_bus:
         bus = setup_virtual_can_bus()

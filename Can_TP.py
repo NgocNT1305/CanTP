@@ -96,9 +96,9 @@ def send_multi_frame(bus, data, is_can_fd):
                 if not is_can_fd: 
                     while len(consecutive_frame) < 8:
                         consecutive_frame.append(PADDING.BYTE_PADDING.value)
-                # print(f"Send Consecutive frame {sequence_number}: {consecutive_frame}")
+                print(f"Send Consecutive frame {sequence_number}: {consecutive_frame}")
                 
-                send_one_frame(bus, data = consecutive_frame, is_can_fd = False)
+                send_one_frame(bus, data = consecutive_frame, is_can_fd = is_can_fd)
                 sequence_number += 1
                 remaining_data = remaining_data[SDU_size:]
                 # print(f"Remaining data: {remaining_data}")
@@ -142,7 +142,7 @@ def receive_can_tp_messages(bus):
     Full_received_frames = []
     frame_receiverd = 0
     block_size = 15
-    current_sn = 1
+    current_sn = 0
     data_length = 0
  
     while True:
@@ -182,14 +182,13 @@ def receive_can_tp_messages(bus):
                         Full_received_frames += msg.data[1:]
                         print(f"Frame {current_sn} received: {list(msg.data)}")
                         frame_receiverd += 1
-                        if (current_sn + 1 == 15):
+                        if (current_sn % 15 == 0):
                             send_flow_control(bus, FS_types.FC_CONTINOUS.value, block_size = block_size, ST_min = 0)
     
                     if len(Full_received_frames) >= data_length:
                         print(f"All frames received.")
                         break
                 else:
-                    print("Can FD is here")
                     pci_byte = msg.data[0] & 0xF0
                     if pci_byte == PCI_types.PCI_SF.value:
                         if msg.data[0] & 0x0F == 0:
